@@ -1,255 +1,74 @@
 package br.com.gennex.definicao;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.Properties;
-import java.util.TimerTask;
 
+import javax.sql.DataSource;
+
+import net.sourceforge.jtds.jdbcx.JtdsDataSource;
+import oracle.jdbc.pool.OracleDataSource;
+
+import org.apache.commons.configuration.AbstractFileConfiguration;
+import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.configuration.DatabaseConfiguration;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.commons.configuration.event.ConfigurationEvent;
+import org.apache.commons.configuration.event.ConfigurationListener;
+import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
 import org.apache.log4j.Logger;
 
-public abstract class Definicao extends TimerTask {
+import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
-	private static final String nomeArquivoCache = "dbcache.properties";
+public abstract class Definicao {
 
-	private static String nomeArquivoDefinicao;
+	protected Configuration properties = new CompositeConfiguration();
 
-	private static final String obtemDataModificacaoBanco = "SELECT DATAHORAULTIMAATUALIZACAO FROM GPROPRIEDADESDISCADOR WHERE IDENTIFICADOR = \'%s\'";
+	protected static final int TIPO_BANCO_ORACLE = 0;
 
-	private static final String obtemDefinicoesDoBanco = "SELECT P.PROPRIEDADE, P.VALOR "
-			+ "FROM GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR "
-			+ "WHERE D.IDENTIFICADOR = \'%s\'";
+	protected static final int TIPO_BANCO_MYSQL = 1;
 
-	public static final String getNomeArquivoDefinicao() {
-		return nomeArquivoDefinicao;
+	protected static final int TIPO_BANCO_MSSQL = 2;
+
+	protected static final String strTipoBancoOracle = "Oracle";
+
+	protected static final String strTipoBancoMySql = "MySQL";
+
+	protected static final String strTipoBancoMsSql = "MSSQL";
+
+	private DataSource criaDataSourceMsSql(String userName, String password) {
+		DataSource dataSource = new JtdsDataSource();
+		((JtdsDataSource) dataSource).setServerName(getServidorBdDefinicao());
+		((JtdsDataSource) dataSource).setPortNumber(getPortaBdDefinicao());
+		((JtdsDataSource) dataSource).setDatabaseName(getNomeBdDefinicao());
+		((JtdsDataSource) dataSource).setUser(userName);
+		((JtdsDataSource) dataSource).setPassword(password);
+		return dataSource;
 	}
 
-	protected Configuration properties = new PropertiesConfiguration();
-
-	private long ultimaModificacaoDefinicao = 0;
-
-	private Calendar ultimaModificacaoDefinicaoBanco = null;
-
-	protected Definicao() {
-
+	private DataSource criaDataSourceMysql(String userName, String password) {
+		DataSource dataSource = new MysqlDataSource();
+		((MysqlDataSource) dataSource).setURL(getConnectionStringDefinicao());
+		((MysqlDataSource) dataSource).setServerName(getServidorBdDefinicao());
+		((MysqlDataSource) dataSource).setPortNumber(getPortaBdDefinicao());
+		((MysqlDataSource) dataSource).setDatabaseName(getNomeBdDefinicao());
+		((MysqlDataSource) dataSource).setUser(userName);
+		((MysqlDataSource) dataSource).setPassword(password);
+		return dataSource;
 	}
 
-	public void atualizaDefinicaoSeNecessario() {
-		if (!arquivoExiste()) {
-			tarefaPosCarregamentoDefinicao();
-			return;
-		}
-		if (verificaSeArquivoFoiModificadoEAtualizaInstante()) {
-			carregaDefinicaoDoArquivo();
-			if (getUsaDefinicoesDoBanco()) {
-				Connection conn = null;
-				try {
-					conn = getConnectionDefinicao();
-					if (conn == null) {
-						Logger.getLogger(getClass()).warn(
-								"Conexao nao obtida. Usando cache!");
-						carregaCache();
-						tarefaPosCarregamentoDefinicao();
-						return;
-					}
-					if (verificaSeBancoFoiModificadoEAtualizaInstante(conn)) {
-						carregaDefinicoesDoBanco(conn);
-						tarefaPosCarregamentoDefinicao();
-						return;
-					}
-				} finally {
-					try {
-						try {
-							if (conn != null) {
-								conn.commit();
-								conn.close();
-								conn = null;
-							}
-						} catch (SQLException e) {
-							Logger.getLogger(getClass()).error(e.getMessage(),
-									e);
-						}
-					} catch (Exception e) {
-						Logger.getLogger(getClass()).error(e.getMessage(), e);
-					}
-				}
-			}
-			tarefaPosCarregamentoDefinicao();
-			return;
-		}
-
-		if (!getUsaDefinicoesDoBanco()) {
-			return;
-		}
-		Connection conn = null;
-		try {
-			conn = getConnectionDefinicao();
-			if (conn == null) {
-				Logger.getLogger(getClass()).warn(
-						"Conexao nao obtida. Usando cache!");
-				carregaCache();
-				tarefaPosCarregamentoDefinicao();
-				return;
-			}
-			if (verificaSeBancoFoiModificadoEAtualizaInstante(conn)) {
-				carregaDefinicoesDoBanco(conn);
-				tarefaPosCarregamentoDefinicao();
-				return;
-			}
-		} finally {
-			try {
-				try {
-					if (conn != null) {
-						conn.commit();
-						conn.close();
-						conn = null;
-					}
-				} catch (SQLException e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-			} catch (Exception e) {
-				Logger.getLogger(getClass()).error(e.getMessage(), e);
-			}
-		}
-	}
-
-	private boolean arquivoExiste() {
-		File f = new File(nomeArquivoDefinicao);
-		return f.exists();
-	}
-
-	private void carregaCache() {
-		carregaDefinicaoDoArquivo(nomeArquivoCache);
-	}
-
-	private void carregaDefinicaoDoArquivo() {
-		carregaDefinicaoDoArquivo(getNomeArquivoDefinicao());
-	}
-
-	private void carregaDefinicaoDoArquivo(String arquivo) {
-		Logger.getLogger(getClass()).info(
-				"Carregando definicoes do arquivo " + arquivo + ".");
-		Properties defaultProps = new Properties();
-		boolean carregou = false;
-		for (int i = 0; i < 10; i++) {
-			try {
-				FileInputStream in = new FileInputStream(arquivo);
-				defaultProps.load(in);
-				in.close();
-				carregou = true;
-				break;
-			} catch (FileNotFoundException e) {
-				Logger
-						.getLogger(getClass())
-						.error(
-								"Arquivo de properties default nao encontrado. Continuarei tentando...");
-				try {
-					Thread.sleep(5000);
-				} catch (InterruptedException f) {
-					Logger.getLogger(getClass()).error(f.getMessage(), f);
-				}
-			} catch (Exception e) {
-				Logger.getLogger(getClass()).error(e.getMessage(), e);
-			}
-		}
-		if (!carregou) {
-			Logger
-					.getLogger(getClass())
-					.error(
-							"Nao consegui encontrar arquivo de properties. Encerrando!");
-			System.exit(1);
-		}
-
-		synchronized (properties) {
-			Iterator<Object> it = defaultProps.keySet().iterator();
-			while (it.hasNext()) {
-				String strValores = (String) it.next();
-				properties.setProperty(strValores, (String) defaultProps
-						.get(strValores));
-			}
-		}
-	}
-
-	private void carregaDefinicoesDoBanco(Connection conn) {
-		Logger.getLogger(getClass()).info("Carregando definicoes do banco.");
-		PreparedStatement ps = null;
-		ResultSet rs = null;
-		try {
-			try {
-				String sql = String.format(obtemDefinicoesDoBanco,
-						getIdentificadorDefinicao());
-				ps = conn.prepareStatement(sql);
-				rs = ps.executeQuery();
-				synchronized (properties) {
-					while (rs.next()) {
-						properties.setProperty(rs.getString("PROPRIEDADE"), rs
-								.getString("VALOR"));
-					}
-					salvaCache((PropertiesConfiguration) properties,
-							nomeArquivoCache);
-				}
-
-			} catch (SQLException e) {
-				Logger.getLogger(getClass()).error(e.getMessage(), e);
-			}
-		} finally {
-			try {
-				try {
-					if (rs != null) {
-						rs.close();
-						rs = null;
-					}
-				} catch (Exception e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-				try {
-					if (ps != null) {
-						ps.close();
-						ps = null;
-					}
-				} catch (Exception e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-			} catch (Exception e) {
-				Logger.getLogger(getClass()).error(e.getMessage(), e);
-			}
-		}
-	}
-
-	private Connection getConnectionDefinicao() {
-		return getConnectionDefinicao(getUsernameBdDefinicao(),
-				getPasswordBdDefinicao());
-
-	}
-
-	private Connection getConnectionDefinicao(String usernameBdDefinicao,
-			String passwordBdDefinicao) {
-		Connection result = null;
-		try {
-			Class.forName(getClassForNameDefinicao());
-		} catch (Exception e) {
-			Logger.getLogger(getClass()).error(e.getMessage(), e);
-		}
-		try {
-			result = DriverManager.getConnection(
-					getConnectionStringDefinicao(), usernameBdDefinicao,
-					passwordBdDefinicao);
-			result.setAutoCommit(false);
-		} catch (SQLException e) {
-			Logger.getLogger(getClass()).error(e.getMessage(), e);
-		}
-		return result;
+	private DataSource criaDataSourceOracle(String userName, String password)
+			throws SQLException {
+		DataSource dataSource = new OracleDataSource();
+		((OracleDataSource) dataSource).setURL(getConnectionStringDefinicao());
+		((OracleDataSource) dataSource).setDriverType("thin");
+		((OracleDataSource) dataSource).setServerName(getServidorBdDefinicao());
+		((OracleDataSource) dataSource).setPortNumber(getPortaBdDefinicao());
+		((OracleDataSource) dataSource).setServiceName(getNomeBdDefinicao());
+		((OracleDataSource) dataSource).setUser(userName);
+		((OracleDataSource) dataSource).setPassword(password);
+		return dataSource;
 	}
 
 	private String getConnectionStringDefinicao() {
@@ -264,12 +83,6 @@ public abstract class Definicao extends TimerTask {
 		return "jdbc:oracle:thin:@" + getServidorBdDefinicao() + ":"
 				+ getPortaBdDefinicao() + ":" + getNomeBdDefinicao();
 
-	}
-
-	public int getPortaBdDefinicao() {
-		synchronized (properties) {
-			return properties.getInt("mailing.portaBdDefinicao", 1521);
-		}
 	}
 
 	private String getIdentificadorDefinicao() {
@@ -291,140 +104,17 @@ public abstract class Definicao extends TimerTask {
 		}
 	}
 
+	public int getPortaBdDefinicao() {
+		synchronized (properties) {
+			return properties.getInt("mailing.portaBdDefinicao", 1521);
+		}
+	}
+
 	private String getServidorBdDefinicao() {
 		synchronized (properties) {
 			return properties.getString("sistema.servidorBdDefinicao",
 					"127.0.0.1");
 		}
-	}
-
-	private boolean getUsaDefinicoesDoBanco() {
-		synchronized (properties) {
-			return properties
-					.getString("sistema.usaDefinicoesDoBanco", "False")
-					.equalsIgnoreCase("True");
-		}
-	}
-
-	private String getUsernameBdDefinicao() {
-		synchronized (properties) {
-			return properties.getString("sistema.usernameBdDefinicao",
-					"discador");
-		}
-	}
-
-	@Override
-	public final void run() {
-		atualizaDefinicaoSeNecessario();
-	}
-
-	private void salvaCache(PropertiesConfiguration propriedades, String destino) {
-		try {
-			propriedades.save(destino);
-		} catch (ConfigurationException e) {
-			Logger.getLogger(getClass()).error(e.getMessage(), e);
-		}
-	}
-
-	public final void setNomeArquivoDefinicao(String nomeArquivoDefinicao) {
-		Definicao.nomeArquivoDefinicao = nomeArquivoDefinicao;
-	}
-
-	protected abstract void tarefaPosCarregamentoDefinicao();
-
-	private boolean verificaSeArquivoFoiModificadoEAtualizaInstante() {
-		File f = new File(nomeArquivoDefinicao);
-		if (f.lastModified() != ultimaModificacaoDefinicao) {
-			ultimaModificacaoDefinicao = f.lastModified();
-			return true;
-		} else
-			return false;
-	}
-
-	private boolean verificaSeBancoFoiModificadoEAtualizaInstante(
-			Connection conn) {
-		PreparedStatement ps = null;
-		ResultSet rs = null;
-		try {
-			String sql = String.format(obtemDataModificacaoBanco,
-					getIdentificadorDefinicao());
-			ps = conn.prepareStatement(sql);
-			rs = ps.executeQuery();
-
-			if (!rs.next()) {
-				Logger.getLogger(getClass()).fatal(
-						"Identificador de definicao nao encontrado!"
-								+ getIdentificadorDefinicao());
-				try {
-					Thread.sleep(5000);
-				} catch (InterruptedException e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-				System.exit(1);
-				// return false;
-			}
-
-			Date ultimaModificacao = rs
-					.getTimestamp("DATAHORAULTIMAATUALIZACAO");
-			Calendar calUltimaModificacao = Calendar.getInstance();
-			calUltimaModificacao.setTime(ultimaModificacao);
-
-			if (calUltimaModificacao.equals(ultimaModificacaoDefinicaoBanco)) {
-				return false;
-			}
-
-			ultimaModificacaoDefinicaoBanco = calUltimaModificacao;
-
-			return true;
-		} catch (SQLException e) {
-			Logger.getLogger(getClass()).error(e.getMessage(), e);
-			return false;
-		} finally {
-			try {
-				try {
-					if (rs != null) {
-						rs.close();
-						rs = null;
-					}
-				} catch (Exception e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-				try {
-					if (ps != null) {
-						ps.close();
-						ps = null;
-					}
-				} catch (Exception e) {
-					Logger.getLogger(getClass()).error(e.getMessage(), e);
-				}
-
-			} catch (Exception e) {
-				Logger.getLogger(getClass()).error(e.getMessage(), e);
-			}
-		}
-
-	}
-
-	protected static final int TIPO_BANCO_ORACLE = 0;
-
-	protected static final int TIPO_BANCO_MYSQL = 1;
-
-	protected static final int TIPO_BANCO_MSSQL = 2;
-
-	protected static final String strTipoBancoOracle = "Oracle";
-
-	protected static final String strTipoBancoMySql = "MySQL";
-
-	protected static final String strTipoBancoMsSql = "MSSQL";
-
-	private String getClassForNameDefinicao() {
-		switch (getTipoBancoDefinicao()) {
-		case TIPO_BANCO_MYSQL:
-			return "com.mysql.jdbc.Driver";
-		case TIPO_BANCO_MSSQL:
-			return "net.sourceforge.jtds.jdbc.Driver";
-		}
-		return "oracle.jdbc.driver.OracleDriver";
 	}
 
 	private int getTipoBancoDefinicao() {
@@ -438,5 +128,72 @@ public abstract class Definicao extends TimerTask {
 		}
 		return TIPO_BANCO_ORACLE;
 	}
+
+	private boolean getUsaDefinicoesDoBanco() {
+		synchronized (properties) {
+			return properties.getBoolean("sistema.usaDefinicoesDoBanco", false);
+		}
+	}
+
+	private String getUsernameBdDefinicao() {
+		synchronized (properties) {
+			return properties.getString("sistema.usernameBdDefinicao",
+					"discador");
+		}
+	}
+
+	public void inicializaDefinicao(String nomeArquivoDefinicao)
+			throws SQLException, FileNotFoundException {
+		try {
+			PropertiesConfiguration propFile = new PropertiesConfiguration(
+					nomeArquivoDefinicao);
+			propFile.setReloadingStrategy(new FileChangedReloadingStrategy());
+			propFile.addConfigurationListener(new ConfigurationListener() {
+				@Override
+				public void configurationChanged(ConfigurationEvent event) {
+					if (event.isBeforeUpdate())
+						return;
+
+					if (event.getType() != AbstractFileConfiguration.EVENT_RELOAD)
+						return;
+					
+					Logger.getLogger(getClass()).info(
+							"Carregando definicoes do arquivo.");
+					tarefaPosCarregamentoDefinicao();
+				}
+			});
+			((CompositeConfiguration) properties).addConfiguration(propFile);
+			tarefaPosCarregamentoDefinicao();
+
+			if (!getUsaDefinicoesDoBanco())
+				return;
+
+			((CompositeConfiguration) properties)
+					.addConfiguration(new DatabaseConfiguration(
+							obtemDataSource(),
+							"GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR",
+							"D.IDENTIFICADOR", "P.PROPRIEDADE", "P.VALOR",
+							getIdentificadorDefinicao()));
+
+		} catch (ConfigurationException e) {
+			throw new FileNotFoundException(e.getMessage());
+		}
+	}
+
+	private DataSource obtemDataSource() throws SQLException {
+		switch (getTipoBancoDefinicao()) {
+		case TIPO_BANCO_MYSQL:
+			return criaDataSourceMysql(getUsernameBdDefinicao(),
+					getPasswordBdDefinicao());
+		case TIPO_BANCO_MSSQL:
+			return criaDataSourceMsSql(getUsernameBdDefinicao(),
+					getPasswordBdDefinicao());
+		default:
+			return criaDataSourceOracle(getUsernameBdDefinicao(),
+					getPasswordBdDefinicao());
+		}
+	}
+
+	protected abstract void tarefaPosCarregamentoDefinicao();
 
 }
