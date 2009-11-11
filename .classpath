@@ -8,7 +8,7 @@
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/commons-collections-3.2.1-bin/commons-collections-3.2.1/commons-collections-3.2.1.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/commons-logging-1.1.1-bin/commons-logging-1.1.1/commons-logging-1.1.1.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/jtds-1.2.2-dist/jtds-1.2.2.jar"/>
-	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/OpenSource/MySQL/mysql-connector-java-3.0.17-ga-bin.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/ojdbc14.jar"/>
+	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/mysql-connector-java-5.1.10/mysql-connector-java-5.1.10/mysql-connector-java-5.1.10-bin.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
