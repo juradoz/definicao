@@ -156,7 +156,7 @@ public abstract class Definicao {
 
 					if (event.getType() != AbstractFileConfiguration.EVENT_RELOAD)
 						return;
-					
+
 					Logger.getLogger(getClass()).info(
 							"Carregando definicoes do arquivo.");
 					tarefaPosCarregamentoDefinicao();
@@ -170,15 +170,18 @@ public abstract class Definicao {
 
 			((CompositeConfiguration) properties)
 					.addConfiguration(new DatabaseConfiguration(
-							obtemDataSource(),
-							"GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR",
-							"D.IDENTIFICADOR", "P.PROPRIEDADE", "P.VALOR",
-							getIdentificadorDefinicao()));
+							obtemDataSource(), table, nameColumn, keyColumn,
+							valueColumn, getIdentificadorDefinicao()));
 
 		} catch (ConfigurationException e) {
 			throw new FileNotFoundException(e.getMessage());
 		}
 	}
+
+	private String table = "GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR";
+	private String nameColumn = "D.IDENTIFICADOR";
+	private String keyColumn = "P.PROPRIEDADE";
+	private String valueColumn = "P.VALOR";
 
 	private DataSource obtemDataSource() throws SQLException {
 		switch (getTipoBancoDefinicao()) {
@@ -195,5 +198,21 @@ public abstract class Definicao {
 	}
 
 	protected abstract void tarefaPosCarregamentoDefinicao();
+
+	protected void setTable(String table) {
+		this.table = table;
+	}
+
+	protected void setNameColumn(String nameColumn) {
+		this.nameColumn = nameColumn;
+	}
+
+	protected void setKeyColumn(String keyColumn) {
+		this.keyColumn = keyColumn;
+	}
+
+	protected void setValueColumn(String valueColumn) {
+		this.valueColumn = valueColumn;
+	}
 
 }
