@@ -1,19 +1,24 @@
 package br.com.gennex.definicao;
 
-import java.io.FileNotFoundException;
+import java.io.File;
+import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Iterator;
 
 import javax.sql.DataSource;
 
 import net.sourceforge.jtds.jdbcx.JtdsDataSource;
 import oracle.jdbc.pool.OracleDataSource;
 
+import org.apache.commons.configuration.AbstractConfiguration;
 import org.apache.commons.configuration.AbstractFileConfiguration;
 import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.DatabaseConfiguration;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.apache.commons.configuration.event.ConfigurationErrorEvent;
+import org.apache.commons.configuration.event.ConfigurationErrorListener;
 import org.apache.commons.configuration.event.ConfigurationEvent;
 import org.apache.commons.configuration.event.ConfigurationListener;
 import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
@@ -143,39 +148,88 @@ public abstract class Definicao {
 	}
 
 	public void inicializaDefinicao(String nomeArquivoDefinicao)
-			throws SQLException, FileNotFoundException {
-		try {
-			PropertiesConfiguration propFile = new PropertiesConfiguration(
-					nomeArquivoDefinicao);
-			propFile.setReloadingStrategy(new FileChangedReloadingStrategy());
-			propFile.addConfigurationListener(new ConfigurationListener() {
-				@Override
-				public void configurationChanged(ConfigurationEvent event) {
-					if (event.isBeforeUpdate())
-						return;
+			throws SQLException, ConfigurationException {
+		inicializaArquivoProperties(nomeArquivoDefinicao);
 
-					if (event.getType() != AbstractFileConfiguration.EVENT_RELOAD)
-						return;
+		if (!getUsaDefinicoesDoBanco())
+			return;
 
-					Logger.getLogger(getClass()).info(
-							"Carregando definicoes do arquivo.");
-					tarefaPosCarregamentoDefinicao();
+		inicializaConfiguracaoDb();
+	}
+
+	private void inicializaArquivoProperties(String nomeArquivoDefinicao)
+			throws ConfigurationException {
+		PropertiesConfiguration propFile = new PropertiesConfiguration(
+				nomeArquivoDefinicao);
+		propFile.setReloadingStrategy(new FileChangedReloadingStrategy());
+		propFile.addConfigurationListener(obtemListenerReload());
+		((CompositeConfiguration) properties).addConfiguration(propFile);
+		tarefaPosCarregamentoDefinicao();
+	}
+
+	private ConfigurationListener obtemListenerReload() {
+		return new ConfigurationListener() {
+			@Override
+			public void configurationChanged(ConfigurationEvent event) {
+				if (event.isBeforeUpdate())
+					return;
+
+				if (event.getType() != AbstractFileConfiguration.EVENT_RELOAD)
+					return;
+
+				Logger.getLogger(getClass()).info(
+						"Carregando definicoes do arquivo.");
+				tarefaPosCarregamentoDefinicao();
+			}
+		};
+	}
+
+	private boolean dbError = false;
+
+	private PropertiesConfiguration cacheFile;
+
+	private DatabaseConfiguration dbProperties;
+
+	@SuppressWarnings("unchecked")
+	private void inicializaConfiguracaoDb() throws SQLException,
+			ConfigurationException {
+		File f = new File("dbCache.properties");
+		if (!f.exists())
+			try {
+				f.createNewFile();
+			} catch (IOException e) {
+				throw new ConfigurationException(e.getMessage());
+			}
+		cacheFile = new PropertiesConfiguration("dbcache.properties");
+		dbProperties = new DatabaseConfiguration(obtemDataSource(), table,
+				nameColumn, keyColumn, valueColumn, getIdentificadorDefinicao());
+		dbProperties.addErrorListener(new ConfigurationErrorListener() {
+
+			@Override
+			public void configurationError(ConfigurationErrorEvent event) {
+				if (event.getType() == AbstractConfiguration.EVENT_READ_PROPERTY) {
+					((CompositeConfiguration) properties)
+							.removeConfiguration(dbProperties);
+					cacheFile.addConfigurationListener(obtemListenerReload());
+					((CompositeConfiguration) properties)
+							.addConfiguration(cacheFile);
+					dbError = true;
 				}
-			});
-			((CompositeConfiguration) properties).addConfiguration(propFile);
-			tarefaPosCarregamentoDefinicao();
+			}
 
-			if (!getUsaDefinicoesDoBanco())
-				return;
+		});
 
-			((CompositeConfiguration) properties)
-					.addConfiguration(new DatabaseConfiguration(
-							obtemDataSource(), table, nameColumn, keyColumn,
-							valueColumn, getIdentificadorDefinicao()));
-
-		} catch (ConfigurationException e) {
-			throw new FileNotFoundException(e.getMessage());
+		Iterator<String> it = dbProperties.getKeys();
+		while (it.hasNext()) {
+			String key = it.next();
+			cacheFile.setProperty(key, dbProperties.getProperty(key));
 		}
+
+		if (dbError)
+			return;
+
+		cacheFile.save();
+		((CompositeConfiguration) properties).addConfiguration(dbProperties);
 	}
 
 	private String table = "GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR";
