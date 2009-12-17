@@ -20,7 +20,8 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/jtds-1.2.2-dist/jtds-1.2.2.jar"/>
-	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/ojdbc14.jar"/>
 	<classpathentry kind="lib" path="C:/Users/Daniel Jurado/Documents/Install/Java/mysql-connector-java-5.1.10/mysql-connector-java-5.1.10/mysql-connector-java-5.1.10-bin.jar"/>
+	<classpathentry kind="lib" path="C:/oracle/ora11/product/11.1.0/client_1/jdbc/lib/ojdbc5.jar"/>
+	<classpathentry kind="lib" path="C:/oracle/ora11/product/11.1.0/client_1/jlib/orai18n.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
