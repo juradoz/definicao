@@ -151,10 +151,10 @@ public abstract class Definicao {
 			throws SQLException, ConfigurationException {
 		inicializaArquivoProperties(nomeArquivoDefinicao);
 
-		if (!getUsaDefinicoesDoBanco())
-			return;
+		if (getUsaDefinicoesDoBanco())
+			inicializaConfiguracaoDb();
 
-		inicializaConfiguracaoDb();
+		tarefaPosCarregamentoDefinicao();
 	}
 
 	private void inicializaArquivoProperties(String nomeArquivoDefinicao)
@@ -164,7 +164,6 @@ public abstract class Definicao {
 		propFile.setReloadingStrategy(new FileChangedReloadingStrategy());
 		propFile.addConfigurationListener(obtemListenerReload());
 		((CompositeConfiguration) properties).addConfiguration(propFile);
-		tarefaPosCarregamentoDefinicao();
 	}
 
 	private ConfigurationListener obtemListenerReload() {
@@ -233,9 +232,9 @@ public abstract class Definicao {
 	}
 
 	private String table = "GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR";
-	private String nameColumn = "D.IDENTIFICADOR";
-	private String keyColumn = "P.PROPRIEDADE";
-	private String valueColumn = "P.VALOR";
+	private String nameColumn = "IDENTIFICADOR";
+	private String keyColumn = "PROPRIEDADE";
+	private String valueColumn = "VALOR";
 
 	private DataSource obtemDataSource() throws SQLException {
 		switch (getTipoBancoDefinicao()) {
