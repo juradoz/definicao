@@ -218,17 +218,34 @@ public abstract class Definicao {
 
 		});
 
-		Iterator<String> it = dbProperties.getKeys();
-		while (it.hasNext()) {
-			String key = it.next();
-			cacheFile.setProperty(key, dbProperties.getProperty(key));
+		byte tryCount = 0;
+		Iterator<String> it = null;
+		while (it == null) {
+			try {
+				it = dbProperties.getKeys();
+				while (it.hasNext()) {
+					String key = it.next();
+					cacheFile.setProperty(key, dbProperties.getProperty(key));
+				}
+
+				if (dbError)
+					return;
+
+				cacheFile.save();
+				((CompositeConfiguration) properties)
+						.addConfiguration(dbProperties);
+			} catch (RuntimeException e) {
+				if (++tryCount > 5) {
+					throw e;
+				} else {
+					Logger.getLogger(getClass()).warn(e.getMessage(), e);
+					try {
+						Thread.sleep(5000);
+					} catch (InterruptedException iex) {
+					}
+				}
+			}
 		}
-
-		if (dbError)
-			return;
-
-		cacheFile.save();
-		((CompositeConfiguration) properties).addConfiguration(dbProperties);
 	}
 
 	private String table = "GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR";
