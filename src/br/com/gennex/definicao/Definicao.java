@@ -1,24 +1,18 @@
 package br.com.gennex.definicao;
 
-import java.io.File;
-import java.io.IOException;
 import java.sql.SQLException;
-import java.util.Iterator;
 
 import javax.sql.DataSource;
 
 import net.sourceforge.jtds.jdbcx.JtdsDataSource;
 import oracle.jdbc.pool.OracleDataSource;
 
-import org.apache.commons.configuration.AbstractConfiguration;
 import org.apache.commons.configuration.AbstractFileConfiguration;
 import org.apache.commons.configuration.CompositeConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.DatabaseConfiguration;
 import org.apache.commons.configuration.PropertiesConfiguration;
-import org.apache.commons.configuration.event.ConfigurationErrorEvent;
-import org.apache.commons.configuration.event.ConfigurationErrorListener;
 import org.apache.commons.configuration.event.ConfigurationEvent;
 import org.apache.commons.configuration.event.ConfigurationListener;
 import org.apache.commons.configuration.reloading.FileChangedReloadingStrategy;
@@ -183,69 +177,72 @@ public abstract class Definicao {
 		};
 	}
 
-	private boolean dbError = false;
+	// private boolean dbError = false;
 
-	private PropertiesConfiguration cacheFile;
+	// private PropertiesConfiguration cacheFile;
 
-	private DatabaseConfiguration dbProperties;
+	// private DatabaseConfiguration dbProperties;
 
-	@SuppressWarnings("unchecked")
+	// @SuppressWarnings("unchecked")
 	private void inicializaConfiguracaoDb() throws SQLException,
 			ConfigurationException {
-		File f = new File("dbCache.properties");
-		if (!f.exists())
-			try {
-				f.createNewFile();
-			} catch (IOException e) {
-				throw new ConfigurationException(e.getMessage());
-			}
-		cacheFile = new PropertiesConfiguration("dbcache.properties");
-		dbProperties = new DatabaseConfiguration(obtemDataSource(), table,
-				nameColumn, keyColumn, valueColumn, getIdentificadorDefinicao());
-		dbProperties.addErrorListener(new ConfigurationErrorListener() {
+		// File f = new File("dbCache.properties");
+		// if (!f.exists())
+		// try {
+		// f.createNewFile();
+		// } catch (IOException e) {
+		// throw new ConfigurationException(e.getMessage());
+		// }
+		// cacheFile = new PropertiesConfiguration("dbcache.properties");
+		DatabaseConfiguration dbProperties = new DatabaseConfiguration(
+				obtemDataSource(), table, nameColumn, keyColumn, valueColumn,
+				getIdentificadorDefinicao());
+		((CompositeConfiguration) properties).addConfiguration(dbProperties);
 
-			@Override
-			public void configurationError(ConfigurationErrorEvent event) {
-				if (event.getType() == AbstractConfiguration.EVENT_READ_PROPERTY) {
-					((CompositeConfiguration) properties)
-							.removeConfiguration(dbProperties);
-					cacheFile.addConfigurationListener(obtemListenerReload());
-					((CompositeConfiguration) properties)
-							.addConfiguration(cacheFile);
-					dbError = true;
-				}
-			}
+		// dbProperties.addErrorListener(new ConfigurationErrorListener() {
+		//
+		// @Override
+		// public void configurationError(ConfigurationErrorEvent event) {
+		// if (event.getType() == AbstractConfiguration.EVENT_READ_PROPERTY) {
+		// ((CompositeConfiguration) properties)
+		// .removeConfiguration(dbProperties);
+		// cacheFile.addConfigurationListener(obtemListenerReload());
+		// ((CompositeConfiguration) properties)
+		// .addConfiguration(cacheFile);
+		// // dbError = true;
+		// }
+		// }
+		//
+		// });
 
-		});
-
-		byte tryCount = 0;
-		Iterator<String> it = null;
-		while (it == null) {
-			try {
-				it = dbProperties.getKeys();
-				while (it.hasNext()) {
-					String key = it.next();
-					cacheFile.setProperty(key, dbProperties.getProperty(key));
-				}
-
-				if (dbError)
-					return;
-
-				cacheFile.save();
-				((CompositeConfiguration) properties)
-						.addConfiguration(dbProperties);
-			} catch (RuntimeException e) {
-				if (++tryCount > 5) {
-					throw e;
-				} else {
-					Logger.getLogger(getClass()).warn(e.getMessage(), e);
-					try {
-						Thread.sleep(5000);
-					} catch (InterruptedException iex) {
-					}
-				}
-			}
-		}
+		// byte tryCount = 0;
+		// Iterator<String> it = null;
+		// while (it == null) {
+		// try {
+		// it = dbProperties.getKeys();
+		// while (it.hasNext()) {
+		// String key = it.next();
+		// cacheFile.setProperty(key, dbProperties.getProperty(key));
+		// }
+		//
+		// if (dbError)
+		// return;
+		//
+		// cacheFile.save();
+		// ((CompositeConfiguration) properties)
+		// .addConfiguration(dbProperties);
+		// } catch (RuntimeException e) {
+		// if (++tryCount > 5) {
+		// throw e;
+		// } else {
+		// Logger.getLogger(getClass()).warn(e.getMessage(), e);
+		// try {
+		// Thread.sleep(5000);
+		// } catch (InterruptedException iex) {
+		// }
+		// }
+		// }
+		// }
 	}
 
 	private String table = "GPROPRIEDADESDISCADOR D INNER JOIN GPROPRIEDADES P ON D.ID = P.IDPROPRIEDADEDISCADOR";
