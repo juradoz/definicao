@@ -84,7 +84,7 @@ public abstract class Definicao {
 
 	}
 
-	private String getIdentificadorDefinicao() {
+	protected String getIdentificadorDefinicao() {
 		synchronized (properties) {
 			return properties.getString("sistema.identificadorDefinicao", "");
 		}
