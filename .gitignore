@@ -1,9 +1,0 @@
-bin/*
-build/*
-jar/*
-*.cfg
-*.dof
-*.dsk
-*.res
-*.~*
-*.ddp
